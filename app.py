@@ -1,13 +1,13 @@
 import os  
 import streamlit as st  
 import pandas as pd  
-import plotly.express as px  
+import matplotlib.pyplot as plt  
 import datetime  
 import base64  
 import sqlite3  
   
 # -------------------------------  
-# 1. Page Config & Data Directory  
+# Page Config & Data Directory  
 # -------------------------------  
 st.set_page_config(  
     page_title="Employee Overtime Tool",  
@@ -39,16 +39,6 @@ def init_sqlite_db():
         approved_by TEXT,  
         status TEXT,  
         notes TEXT  
-    )  
-    """)  
-      
-    cursor.execute("""  
-    CREATE TABLE IF NOT EXISTS employees (  
-        employee_id TEXT PRIMARY KEY,  
-        name TEXT,  
-        department TEXT,  
-        position TEXT,  
-        status TEXT  
     )  
     """)  
       
@@ -89,30 +79,51 @@ def get_download_link(df):
 def overtime_entry():  
     st.header("Overtime Entry")  
       
-    col1, col2 = st.columns(2)  
-    with col1:  
-        emp_id = st.text_input("Employee ID")  
-        name = st.text_input("Name")  
-        department = st.selectbox("Department", ["Scheduling", "OCC", "Training", "Operations"])  
-      
-    with col2:  
-        date = st.date_input("Date")  
-        hours = st.number_input("Hours", min_value=0.0, step=0.5)  
-        ot_type = st.selectbox("Type", ["Regular", "Holiday", "Special"])  
-      
-    approved_by = st.text_input("Approved By")  
-    status = st.selectbox("Status", ["Pending", "Approved", "Rejected"])  
-    notes = st.text_area("Notes")  
-      
-    if st.button("Submit"):  
-        overtime_id = f"OT{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"  
-        data = (overtime_id, emp_id, name, department, str(date),   
-                hours, ot_type, approved_by, status, notes)  
-        save_overtime(data)  
-        st.success("Overtime entry saved successfully!")  
+    with st.form("overtime_form"):  
+        col1, col2 = st.columns(2)  
+          
+        with col1:  
+            date = st.date_input("Date")  
+            employee_id = st.text_input("Employee ID")  
+            name = st.text_input("Employee Name")  
+            department = st.selectbox(  
+                "Department",  
+                ["Operations", "Engineering", "HR", "Finance"]  
+            )  
+          
+        with col2:  
+            hours = st.number_input("Hours", min_value=0.0, step=0.5)  
+            overtime_type = st.selectbox(  
+                "Type",  
+                ["Regular", "Holiday", "Special"]  
+            )  
+            status = st.selectbox(  
+                "Status",  
+                ["Pending", "Approved", "Rejected"]  
+            )  
+            approved_by = st.text_input("Approved By")  
+          
+        notes = st.text_area("Notes")  
+          
+        if st.form_submit_button("Submit"):  
+            data = (  
+                str(datetime.datetime.now().timestamp()),  
+                employee_id,  
+                name,  
+                department,  
+                str(date),  
+                hours,  
+                overtime_type,  
+                approved_by,  
+                status,  
+                notes  
+            )  
+            save_overtime(data)  
+            st.success("Entry saved successfully!")  
   
 def upload_data():  
     st.header("Upload Data")  
+      
     uploaded_file = st.file_uploader("Choose CSV file", type="csv")  
       
     if uploaded_file is not None:  
@@ -138,18 +149,22 @@ def view_reports():
         col2.metric("Total Entries", total_entries)  
         col3.metric("Pending Approvals", pending)  
           
-        # Charts  
+        # Charts using matplotlib  
         st.subheader("Department Distribution")  
-        fig = px.pie(df, names='department', values='hours',   
-                    title='Overtime Hours by Department')  
-        st.plotly_chart(fig, use_container_width=True)  
+        fig, ax = plt.subplots(figsize=(10, 6))  
+        dept_hours = df.groupby('department')['hours'].sum()  
+        dept_hours.plot(kind='pie', ax=ax)  
+        plt.title('Overtime Hours by Department')  
+        st.pyplot(fig)  
           
         st.subheader("Daily Trend")  
+        fig2, ax2 = plt.subplots(figsize=(10, 6))  
         df['date'] = pd.to_datetime(df['date'])  
-        daily_hours = df.groupby('date')['hours'].sum().reset_index()  
-        fig2 = px.line(daily_hours, x='date', y='hours',   
-                      title='Daily Overtime Hours')  
-        st.plotly_chart(fig2, use_container_width=True)  
+        daily_hours = df.groupby('date')['hours'].sum()  
+        daily_hours.plot(ax=ax2)  
+        plt.title('Daily Overtime Hours')  
+        plt.xticks(rotation=45)  
+        st.pyplot(fig2)  
           
         # Data table  
         st.subheader("Detailed Records")  
